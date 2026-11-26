@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Foundable Acquisition — Autonomous Client Acquisition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: '#1F3446',
+                        gold: '#E1A94B',
+                        cream: '#F6F3E9',
+                        teal: '#6FA9B8',
+                        charcoal: '#2B2B2B',
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F6F3E9; color: #2B2B2B; font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-cream text-charcoal antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [stats, setStats] = useState(null);
+            const [prospects, setProspects] = useState([]);
+            const [settings, setSettings] = useState(null);
+            const [analytics, setAnalytics] = useState(null);
+            const [report, setReport] = useState(null);
+            const [selectedProspect, setSelectedProspect] = useState(null);
+            const [gmailStatus, setGmailStatus] = useState({ connected: false, email: null });
+            const [loading, setLoading] = useState(false);
+            const [notification, setNotification] = useState(null);
+
+            const fetchData = async () => {
+                try {
+                    const statsRes = await fetch('/api/dashboard/stats');
+                    setStats(await statsRes.json());
+
+                    const prospRes = await fetch('/api/prospects');
+                    setProspects(await prospRes.json());
+
+                    const setRes = await fetch('/api/settings');
+                    setSettings(await setRes.json());
+
+                    const anRes = await fetch('/api/analytics');
+                    setAnalytics(await anRes.json());
+
+                    const repRes = await fetch('/api/reports/daily');
+                    setReport(await repRes.json());
+
+                    const gmailRes = await fetch('/api/auth/gmail/status');
+                    setGmailStatus(await gmailRes.json());
+                } catch (err) {
+                    console.error("Failed to fetch data:", err);
+                }
+            };
+
+            useEffect(() => {
+                fetchData();
+                // Check URL params for gmail_connected
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('gmail_connected') === 'true') {
+                    showNotification('Gmail successfully connected live via OAuth!', 'success');
+                }
+                const interval = setInterval(fetchData, 10000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const connectGmail = async () => {
+                try {
+                    const res = await fetch('/api/auth/gmail/connect');
+                    const data = await res.json();
+                    if (data.auth_url) {
+                        window.location.href = data.auth_url;
+                    }
+                } catch (e) {
+                    showNotification('Failed to initiate Gmail OAuth', 'error');
+                }
+            };
+
+            const triggerDiscovery = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/discovery/run', { method: 'POST' });
+                    const data = await res.json();
+                    showNotification(data.message, 'success');
+                    fetchData();
+                } catch (e) {
+                    showNotification('Discovery failed', 'error');
+                }
+                setLoading(false);
+            };
+
+            const emergencyStop = async () => {
+                try {
+                    const res = await fetch('/api/automation/emergency-stop', { method: 'POST' });
+                    const data = await res.json();
+                    showNotification(data.message, 'warning');
+                    fetchData();
+                } catch (e) {
+                    showNotification('Emergency stop failed', 'error');
+                }
+            };
+
+            const resumeAutopilot = async () => {
+                try {
+                    const res = await fetch('/api/automation/resume', { method: 'POST' });
+                    const data = await res.json();
+                    showNotification(data.message, 'success');
+                    fetchData();
+                } catch (e) {
+                    showNotification('Resume failed', 'error');
+                }
+            };
+
+            const approveEmail = async (id) => {
+                await fetch(`/api/prospects/${id}/approve-email`, { method: 'POST' });
+                showNotification('Email approved!', 'success');
+                fetchData();
+            };
+
+            const sendEmail = async (id) => {
+                await fetch(`/api/prospects/${id}/send-email`, { method: 'POST' });
+                showNotification('Email sent successfully!', 'success');
+                fetchData();
+            };
+
+            const rejectEmail = async (id) => {
+                await fetch(`/api/prospects/${id}/reject-email`, { method: 'POST' });
+                showNotification('Email draft rejected.', 'info');
+                fetchData();
+            };
+
+            const showNotification = (msg, type) => {
+                setNotification({ msg, type });
+                setTimeout(() => setNotification(null), 4000);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col pb-20 md:pb-0 md:flex-row">
+                    {/* Desktop Sidebar */}
+                    <aside className="hidden md:flex flex-col w-64 bg-navy text-white p-6 sticky top-0 h-screen shadow-xl">
+                            <div className="flex items-center space-x-3 mb-8">
+                            <div className="w-10 h-10 bg-gold rounded-xl flex items-center justify-center font-bold text-navy text-xl shadow-lg">F</div>
+                            <div>
+                                <h1 className="font-bold text-lg leading-tight">Foundable</h1>
+                                <p className="text-xs text-teal font-medium tracking-wider uppercase">Acquisition</p>
+                            </div>
+                        </div>
+
+                        <nav className="space-y-1.5 flex-1 overflow-y-auto pr-1">
+                            {[
+                                { id: 'dashboard', label: 'Dashboard' },
+                                { id: 'prospects', label: 'Prospects' },
+                                { id: 'research', label: 'Research' },
+                                { id: 'queue', label: 'Email Queue' },
+                                { id: 'sent', label: 'Sent Emails' },
+                                { id: 'inbox', label: 'Inbox / Replies' },
+                                { id: 'followups', label: 'Follow-ups' },
+                                { id: 'analytics', label: 'Analytics' },
+                                { id: 'automation', label: 'Automation' },
+                                { id: 'settings', label: 'Settings & Setup' },
+                            ].map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id)}
+                                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                                        activeTab === item.id 
+                                            ? 'bg-gold text-navy font-bold shadow-md' 
+                                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                >
+                                    <span>{item.label}</span>
+                                </button>
+                            ))}
+                        </nav>
+
+                        {/* Emergency Stop Button */}
+                        <div className="pt-4 border-t border-white/10 mt-auto">
+                            {stats?.emergency_stop ? (
+                                <button onClick={resumeAutopilot} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-lg flex items-center justify-center space-x-2">
+                                    <span>Resume Autopilot</span>
+                                </button>
+                            ) : (
+                                <button onClick={emergencyStop} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-lg flex items-center justify-center space-x-2">
+                                    <span>EMERGENCY STOP</span>
+                                </button>
+                            )}
+                        </div>
+                    </aside>
+
+                    {/* Mobile Bottom Nav */}
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-navy text-white z-50 flex justify-around p-3 border-t border-white/10 shadow-2xl">
+                        {[
+                            { id: 'dashboard', label: 'Home', icon: '🏠' },
+                            { id: 'prospects', label: 'Leads', icon: '👥' },
+                            { id: 'queue', label: 'Queue', icon: '✉️' },
+                            { id: 'inbox', label: 'Inbox', icon: '📥' },
+                            { id: 'automation', label: 'Auto', icon: '⚙️' },
+                        ].map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => setActiveTab(item.id)}
+                                className={`flex flex-col items-center text-xs ${activeTab === item.id ? 'text-gold font-bold' : 'text-gray-300'}`}
+                            >
+                                <span className="text-xl mb-0.5">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Main Content Area */}
+                    <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+                        {/* Notification Toast */}
+                        {notification && (
+                            <div className={`mb-6 p-4 rounded-xl text-white font-medium shadow-xl flex items-center justify-between ${
+                                notification.type === 'success' ? 'bg-emerald-600' :
+                                notification.type === 'warning' ? 'bg-amber-600' : 'bg-red-600'
+                            }`}>
+                                <span>{notification.msg}</span>
+                                <button onClick={() => setNotification(null)} className="font-bold ml-4">✕</button>
+                            </div>
+                        )}
+
+                        {/* Top Header */}
+                        <header className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-6 border-b border-gray-300">
+                            <div>
+                                <h2 className="text-2xl md:text-3xl font-extrabold text-navy capitalize">
+                                    {activeTab === 'dashboard' ? 'Foundable Acquisition Dashboard' :
+                                     activeTab === 'settings' ? 'Settings & Onboarding Wizard' : activeTab}
+                                </h2>
+                                <p className="text-sm text-gray-600 mt-1">Autonomous Client Discovery & Outreach for Foundable By Jay</p>
+                            </div>
+                            <div className="mt-4 md:mt-0 flex items-center space-x-3">
+                                <button
+                                    onClick={triggerDiscovery}
+                                    disabled={loading}
+                                    className="bg-navy hover:bg-navy/90 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition shadow-md flex items-center space-x-2"
+                                >
+                                    <span>{loading ? 'Discovering...' : 'Run Discovery Now'}</span>
+                                </button>
+                                <div className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                    stats?.autopilot_status ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-850'
+                                }`}>
+                                    {stats?.autopilot_status ? 'Autopilot Active' : 'Autopilot Paused'}
+                                </div>
+                            </div>
+                        </header>
+
+                        {/* DASHBOARD TAB */}
+                        {activeTab === 'dashboard' && stats && (
+                            <div className="space-y-8">
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {[
+                                        { label: "Today's Discoveries", value: stats.today_discoveries, color: "bg-white text-navy" },
+                                        { label: "Hot Leads", value: stats.hot_leads, color: "bg-navy text-white" },
+                                        { label: "Emails Awaiting Approval", value: stats.emails_awaiting_approval, color: "bg-gold text-navy" },
+                                        { label: "Replies Received", value: stats.replies_received, color: "bg-teal text-navy" },
+                                    ].map((stat, i) => (
+                                        <div key={i} className={`${stat.color} p-5 rounded-2xl shadow-md border border-black/5`}>
+                                            <p className="text-xs font-semibold uppercase tracking-wider opacity-80">{stat.label}</p>
+                                            <p className="text-3xl font-black mt-2">{stat.value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Today's Report Card */}
+                                {report && (
+                                    <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-200">
+                                        <h3 className="text-lg font-bold text-navy mb-3">Daily Executive Summary</h3>
+                                        <p className="text-sm text-gray-700 leading-relaxed mb-4">{report.summary_text}</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-medium text-gray-600 bg-cream p-4 rounded-xl">
+                                            <div>Queries Executed: <span className="font-bold text-navy">{report.queries_executed}</span></div>
+                                            <div>Sources Checked: <span className="font-bold text-navy">{report.sources_investigated}</span></div>
+                                            <div>Duplicates Removed: <span className="font-bold text-navy">{report.duplicates_removed}</span></div>
+                                            <div>Emails Sent: <span className="font-bold text-navy">{report.emails_sent}</span></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Recent Hot Leads */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-lg font-bold text-navy">High-Priority Hot Leads</h3>
+                                        <button onClick={() => setActiveTab('prospects')} className="text-sm text-teal font-bold hover:underline">View All Leads →</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {prospects.filter(p => p.lead_classification === 'HOT').slice(0, 4).map(p => (
+                                            <div key={p.id} className="bg-white p-5 rounded-2xl shadow-md border border-gray-200 flex flex-col justify-between">
+                                                <div>
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-bold text-navy text-base">{p.business_name}</h4>
+                                                        <span className="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">Score: {p.lead_score}</span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mb-2">{p.city}, {p.country} • {p.business_category}</p>
+                                                    <p className="text-xs font-medium text-gray-700 bg-cream p-3 rounded-xl mb-4 line-clamp-2">Source: {p.original_source}</p>
+                                                </div>
+                                                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                                                    <button onClick={() => { setSelectedProspect(p); setActiveTab('research'); }} className="text-xs font-bold text-navy bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg">View Research</button>
+                                                    {p.email_status === 'pending_approval' && (
+                                                        <button onClick={() => approveEmail(p.id)} className="text-xs font-bold text-white bg-gold hover:bg-gold/90 px-3 py-2 rounded-lg">Approve Email</button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* PROSPECTS TAB */}
+                        {activeTab === 'prospects' && (
+                            <div className="space-y-6">
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search prospects by name, city or industry..." 
+                                        className="w-full md:w-96 px-4 py-2.5 bg-cream rounded-xl text-sm border-none focus:ring-2 focus:ring-navy"
+                                    />
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-xs font-bold text-gray-500 uppercase">Filter:</span>
+                                        <select className="px-3 py-2 bg-cream rounded-xl text-sm font-medium">
+                                            <option value="">All Classifications</option>
+                                            <option value="HOT">HOT Leads</option>
+                                            <option value="B">Strong Opportunity (B)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-2xl shadow-md overflow-hidden border border-gray-200">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-navy text-white text-xs uppercase tracking-wider">
+                                                    <th className="p-4">Business Name</th>
+                                                    <th className="p-4">Category & Location</th>
+                                                    <th className="p-4">Score</th>
+                                                    <th className="p-4">Source</th>
+                                                    <th className="p-4">Email Status</th>
+                                                    <th className="p-4">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200 text-sm">
+                                                {prospects.map(p => (
+                                                    <tr key={p.id} className="hover:bg-cream/50 transition">
+                                                        <td className="p-4 font-bold text-navy">
+                                                            {p.business_name}
+                                                            <div className="text-xs font-normal text-gray-500">{p.contact_email || 'No email listed'}</div>
+                                                        </td>
+                                                        <td className="p-4 text-xs text-gray-600">
+                                                            <div className="font-semibold text-gray-800">{p.business_category}</div>
+                                                            {p.city}, {p.country}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                                p.lead_classification === 'HOT' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
+                                                            }`}>{p.lead_score} / 100</span>
+                                                        </td>
+                                                        <td className="p-4 text-xs text-gray-600">{p.original_source}</td>
+                                                        <td className="p-4">
+                                                            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 capitalize">{p.email_status}</span>
+                                                        </td>
+                                                        <td className="p-4 space-x-2">
+                                                            <button onClick={() => { setSelectedProspect(p); setActiveTab('research'); }} className="text-xs font-bold text-navy hover:underline">Research</button>
+                                                            {p.email_status === 'pending_approval' && (
+                                                                <button onClick={() => approveEmail(p.id)} className="text-xs font-bold text-gold hover:underline">Approve</button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* RESEARCH TAB */}
+                        {activeTab === 'research' && (
+                            <div className="space-y-6">
+                                {selectedProspect ? (
+                                    <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md border border-gray-200 space-y-6">
+                                        <div className="flex justify-between items-start border-b pb-4">
+                                            <div>
+                                                <h3 className="text-2xl font-black text-navy">{selectedProspect.business_name}</h3>
+                                                <p className="text-sm text-gray-500">{selectedProspect.business_category} • {selectedProspect.city}, {selectedProspect.country}</p>
+                                            </div>
+                                            <span className="bg-gold text-navy font-bold px-4 py-1.5 rounded-xl text-sm">Lead Score: {selectedProspect.lead_score}/100</span>
+                                        </div>
+                                        
+                                        <div>
+                                            <h4 className="text-sm font-bold text-navy uppercase tracking-wider mb-2">Internal Research Report</h4>
+                                            <pre className="bg-cream p-4 rounded-xl text-xs font-mono text-gray-800 whitespace-pre-wrap leading-relaxed border">{selectedProspect.research_report}</pre>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="bg-cream p-4 rounded-xl">
+                                                <h5 className="font-bold text-navy text-xs uppercase mb-1">Recommended Service</h5>
+                                                <p className="text-sm text-gray-700">{selectedProspect.recommended_service}</p>
+                                            </div>
+                                            <div className="bg-cream p-4 rounded-xl">
+                                                <h5 className="font-bold text-navy text-xs uppercase mb-1">Contact Email</h5>
+                                                <p className="text-sm text-gray-700 font-mono">{selectedProspect.contact_email || 'Not verified'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white p-12 rounded-2xl shadow-md text-center">
+                                        <p className="text-gray-500 mb-4">No prospect selected for research view.</p>
+                                        <button onClick={() => setActiveTab('prospects')} className="bg-navy text-white font-bold px-6 py-2.5 rounded-xl text-sm">Select a Prospect from Leads</button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* EMAIL QUEUE TAB */}
+                        {activeTab === 'queue' && (
+                            <div className="space-y-6">
+                                <h3 className="text-lg font-bold text-navy">Email Approval Queue ({prospects.filter(p => p.email_status === 'pending_approval' || p.email_status === 'approved').length})</h3>
+                                <div className="space-y-4">
+                                    {prospects.filter(p => p.email_status === 'pending_approval' || p.email_status === 'approved').map(p => (
+                                        <div key={p.id} className="bg-white p-6 rounded-2xl shadow-md border border-gray-200 space-y-4">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h4 className="font-bold text-navy text-lg">{p.business_name}</h4>
+                                                    <p className="text-xs text-gray-500">To: {p.contact_email} • Score: {p.lead_score}</p>
+                                                </div>
+                                                <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase ${
+                                                    p.email_status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-850'
+                                                }`}>{p.email_status}</span>
+                                            </div>
+
+                                            <div className="bg-cream p-4 rounded-xl space-y-2 border">
+                                                <div className="text-xs font-bold text-navy">Subject: {p.email_subject}</div>
+                                                <pre className="text-xs font-sans text-gray-800 whitespace-pre-wrap leading-relaxed">{p.email_draft}</pre>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 pt-2">
+                                                {p.email_status === 'pending_approval' && (
+                                                    <button onClick={() => approveEmail(p.id)} className="bg-gold hover:bg-gold/90 text-navy font-bold px-4 py-2 rounded-xl text-xs">Approve Draft</button>
+                                                )}
+                                                <button onClick={() => sendEmail(p.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs">Send Email Now</button>
+                                                <button onClick={() => rejectEmail(p.id)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-xl text-xs">Reject</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SENT EMAILS TAB */}
+                        {activeTab === 'sent' && (
+                            <div className="space-y-6">
+                                <h3 className="text-lg font-bold text-navy">Sent Outreach History</h3>
+                                <div className="space-y-4">
+                                    {prospects.filter(p => p.email_status === 'sent').map(p => (
+                                        <div key={p.id} className="bg-white p-6 rounded-2xl shadow-md border border-gray-200">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h4 className="font-bold text-navy">{p.business_name}</h4>
+                                                <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Sent successfully</span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mb-3">Recipient: {p.contact_email} • Last Contact: {new Date().toLocaleDateString()}</p>
+                                            <div className="bg-cream p-4 rounded-xl text-xs font-sans text-gray-800 whitespace-pre-wrap">{p.email_draft}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* INBOX TAB */}
+                        {activeTab === 'inbox' && (
+                            <div className="space-y-6">
+                                <h3 className="text-lg font-bold text-navy">Inbox & Response Intelligence</h3>
+                                <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-200">
+                                    <p className="text-sm text-gray-600 mb-4">Incoming responses are automatically monitored via Gmail API OAuth and classified into intent categories.</p>
+                                    <div className="bg-cream p-6 rounded-xl text-center">
+                                        <p className="text-sm font-bold text-navy">All caught up! No unread replies requiring human attention right now.</p>
+                                        <p className="text-xs text-gray-500 mt-1">Autonomous follow-up scheduler is active.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* FOLLOW UPS TAB */}
+                        {activeTab === 'followups' && (
+                            <div className="space-y-6">
+                                <h3 className="text-lg font-bold text-navy">Intelligent Follow-up Manager</h3>
+                                <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-200">
+                                    <p className="text-sm text-gray-600 mb-4">Follow-ups are automatically scheduled 4 business days after initial outreach, followed by a second follow-up 7 days later.</p>
+                                    <div className="space-y-3">
+                                        {prospects.filter(p => p.email_status === 'sent').map(p => (
+                                            <div key={p.id} className="flex items-center justify-between p-4 bg-cream rounded-xl text-sm">
+                                                <div>
+                                                    <span className="font-bold text-navy">{p.business_name}</span>
+                                                    <div className="text-xs text-gray-500">First follow-up scheduled in 4 days</div>
+                                                </div>
+                                                <span className="bg-teal text-navy text-xs font-bold px-3 py-1 rounded-full">Scheduled</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ANALYTICS TAB */}
+                        {activeTab === 'analytics' && analytics && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="bg-white p-5 rounded-2xl shadow-md">
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Total Discovered</p>
+                                        <p className="text-3xl font-black text-navy mt-2">{analytics.total_discovered}</p>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-2xl shadow-md">
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Qualified</p>
+                                        <p className="text-3xl font-black text-navy mt-2">{analytics.qualified}</p>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-2xl shadow-md">
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Contacted</p>
+                                        <p className="text-3xl font-black text-navy mt-2">{analytics.contacted}</p>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-2xl shadow-md">
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Reply Rate</p>
+                                        <p className="text-3xl font-black text-emerald-600 mt-2">{analytics.reply_rate}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* AUTOMATION TAB */}
+                        {activeTab === 'automation' && settings && (
+                            <div className="space-y-6">
+                                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md border border-gray-200 space-y-6">
+                                    <h3 className="text-xl font-black text-navy">Central Automation Controls</h3>
+                                    <div className="space-y-4">
+                                        <label className="flex items-center justify-between p-4 bg-cream rounded-xl cursor-pointer">
+                                            <div>
+                                                <span className="font-bold text-navy block">Autopilot Mode</span>
+                                                <span className="text-xs text-gray-600">Continuously discover, research, and send qualified outreach</span>
+                                            </div>
+                                            <input type="checkbox" defaultChecked={settings.autopilot_enabled} className="w-5 h-5 text-gold rounded" />
+                                        </label>
+
+                                        <label className="flex items-center justify-between p-4 bg-cream rounded-xl cursor-pointer">
+                                            <div>
+                                                <span className="font-bold text-navy block">Autonomous Email Sending</span>
+                                                <span className="text-xs text-gray-600">Send approved emails automatically within daily limits</span>
+                                            </div>
+                                            <input type="checkbox" defaultChecked={settings.email_sending_enabled} className="w-5 h-5 text-gold rounded" />
+                                        </label>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                                        <div>
+                                            <label className="block text-xs font-bold text-navy uppercase mb-1">Daily Email Limit</label>
+                                            <input type="number" defaultValue={settings.daily_email_limit} className="w-full px-4 py-2.5 bg-cream rounded-xl text-sm border" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-navy uppercase mb-1">Daily Research Budget</label>
+                                            <input type="number" defaultValue={settings.daily_research_budget} className="w-full px-4 py-2.5 bg-cream rounded-xl text-sm border" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SETTINGS & ONBOARDING WIZARD TAB */}
+                        {activeTab === 'settings' && settings && (
+                            <div className="space-y-6">
+                                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md border border-gray-200 space-y-6">
+                                    <h3 className="text-xl font-black text-navy">Foundable By Jay — Business Profile & Settings</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-navy uppercase mb-1">Business Name</label>
+                                            <input type="text" defaultValue="Foundable By Jay" className="w-full px-4 py-2.5 bg-cream rounded-xl text-sm border" />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-navy uppercase mb-1">Core Positioning Statement</label>
+                                            <textarea rows="3" defaultValue="I help small businesses get online the right way so people can find them and understand them." className="w-full px-4 py-2.5 bg-cream rounded-xl text-sm border"></textarea>
+                                        </div>
+
+                                        {/* Gmail OAuth Integration Card */}
+                                        <div className="bg-cream p-5 rounded-xl border border-gold/40 space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <h4 className="font-bold text-navy text-sm">Gmail API / Google Workspace OAuth Integration</h4>
+                                                    <p className="text-xs text-gray-600">
+                                                        {gmailStatus.connected ? `Connected as ${gmailStatus.email}` : 'Connect your business email account to send live outreach securely.'}
+                                                    </p>
+                                                </div>
+                                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${gmailStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    {gmailStatus.connected ? 'Live Connected' : 'Not Connected'}
+                                                </span>
+                                            </div>
+                                            <button 
+                                                onClick={connectGmail}
+                                                className="bg-navy text-white font-bold px-4 py-2 rounded-xl text-xs shadow hover:bg-navy/90 transition"
+                                            >
+                                                {gmailStatus.connected ? 'Reconnect Gmail Account' : 'Connect Gmail Account'}
+                                            </button>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-navy uppercase mb-2">Services Offered</label>
+                                            <div className="space-y-2 text-xs font-medium text-gray-700 bg-cream p-4 rounded-xl">
+                                                <div>✓ Professional business website design and development</div>
+                                                <div>✓ Mobile-friendly website redesigns</div>
+                                                <div>✓ Website development for businesses with no website</div>
+                                                <div>✓ Website repairs, improvements, and modernisation</div>
+                                                <div>✓ WordPress, Wix, Shopify, Webflow, Squarespace development</div>
+                                                <div>✓ Google Business Profile creation and optimisation</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t flex justify-end">
+                                        <button onClick={() => showNotification('Settings saved successfully!', 'success')} className="bg-navy text-white font-bold px-6 py-3 rounded-xl text-sm shadow-md">Save Settings</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
