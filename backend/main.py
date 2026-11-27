@@ -137,55 +137,62 @@ def send_email(prospect_id: int, db: Session = Depends(get_db)):
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    # Check if Gmail integration is live connected
     gmail_integration = db.query(Integration).filter(Integration.service_name == "gmail", Integration.is_connected == True).first()
     
     send_mode = "simulated"
     error_msg = None
     
     if gmail_integration and gmail_integration.access_token:
-        # Live Gmail API sending
-        import httpx
-        import base64
-        from email.mime.text import MIMEText
-        
-        try:
-            message = MIMEText(prospect.email_draft or "")
-            message['To'] = prospect.contact_email
-            message['Subject'] = prospect.email_subject or "Foundable By Jay"
-            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
-            
-            headers = {
-                "Authorization": f"Bearer {gmail_integration.access_token}",
-                "Content-Type": "application/json"
-            }
-            response = httpx.post(
-                "https://www.googleapis.com/gmail/v1/users/me/messages/send",
-                headers=headers,
-                json={"raw": raw_message},
-                timeout=15.0
-            )
-            if response.status_code == 200:
-                send_mode = "live_gmail_api"
-            else:
-                error_msg = f"Gmail API error: {response.text}"
-                send_mode = "simulated_fallback"
-        except Exception as e:
-            error_msg = str(e)
+        if gmail_integration.access_token.startswith("mock_live_access_token_"):
+            error_msg = "Live Gmail sending requires real GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET configured in Render Environment Variables. Using simulation mode."
             send_mode = "simulated_fallback"
+        else:
+            import httpx
+            import base64
+            from email.mime.text import MIMEText
+            
+            try:
+                message = MIMEText(prospect.email_draft or "")
+                message['To'] = prospect.contact_email
+                message['Subject'] = prospect.email_subject or "Foundable By Jay"
+                raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+                
+                headers = {
+                    "Authorization": f"Bearer {gmail_integration.access_token}",
+                    "Content-Type": "application/json"
+                }
+                response = httpx.post(
+                    "https://www.googleapis.com/gmail/v1/users/me/messages/send",
+                    headers=headers,
+                    json={"raw": raw_message},
+                    timeout=15.0
+                )
+                if response.status_code == 200:
+                    send_mode = "live_gmail_api"
+                else:
+                    error_msg = f"Gmail API error ({response.status_code}): {response.text}"
+                    send_mode = "failed"
+            except Exception as e:
+                error_msg = str(e)
+                send_mode = "failed"
 
-    prospect.email_status = "sent"
-    prospect.last_contact_date = datetime.utcnow()
+    status_val = "sent" if send_mode != "failed" else "failed"
+    prospect.email_status = status_val
+    if status_val == "sent":
+        prospect.last_contact_date = datetime.utcnow()
     
     db.add(OutreachMessage(
         prospect_id=prospect.id,
         subject=prospect.email_subject or "Quick thought",
         body=prospect.email_draft or "",
-        status="sent" if not error_msg else "failed",
-        sent_at=datetime.utcnow(),
+        status=status_val,
+        sent_at=datetime.utcnow() if status_val == "sent" else None,
         error_message=error_msg
     ))
     db.commit()
+    
+    if status_val == "failed":
+        raise HTTPException(status_code=400, detail=f"Failed to send email: {error_msg}")
     
     return {
         "status": "success", 
@@ -225,21 +232,49 @@ def gmail_connect():
 
 @app.get("/api/auth/gmail/callback")
 def gmail_callback(code: str = None, db: Session = Depends(get_db)):
-    # In production, exchanges code for access & refresh tokens with Google OAuth API
-    # For demonstration/seamless onboarding, if code is present or demo mode:
+    client_id = os.environ.get("GMAIL_CLIENT_ID", "")
+    client_secret = os.environ.get("GMAIL_CLIENT_SECRET", "")
+    redirect_uri = os.environ.get("GMAIL_REDIRECT_URI", "https://foundable-acquisition.onrender.com/api/auth/gmail/callback")
+    
+    access_token = "mock_live_access_token_" + (code or "demo")
+    refresh_token = "mock_live_refresh_token"
+    account_email = "jay@foundablebyjay.com"
+    
+    # If real client credentials are set, exchange code with Google OAuth token endpoint
+    if client_id and client_secret and code and "your_google" not in client_id:
+        import httpx
+        try:
+            token_resp = httpx.post("https://oauth2.googleapis.com/token", data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code"
+            }, timeout=10.0)
+            if token_resp.status_code == 200:
+                token_data = token_resp.json()
+                access_token = token_data.get("access_token", access_token)
+                refresh_token = token_data.get("refresh_token", refresh_token)
+                
+                # Fetch user profile email
+                profile_resp = httpx.get("https://www.googleapis.com/oauth2/v1/userinfo", headers={"Authorization": f"Bearer {access_token}"}, timeout=5.0)
+                if profile_resp.status_code == 200:
+                    account_email = profile_resp.json().get("email", account_email)
+        except Exception as e:
+            print(f"Token exchange error: {e}")
+
     integration = db.query(Integration).filter(Integration.service_name == "gmail").first()
     if not integration:
         integration = Integration(service_name="gmail")
         db.add(integration)
     
     integration.is_connected = True
-    integration.access_token = "mock_live_access_token_" + (code or "demo")
-    integration.refresh_token = "mock_live_refresh_token"
-    integration.account_email = "jay@foundablebyjay.com"
+    integration.access_token = access_token
+    integration.refresh_token = refresh_token
+    integration.account_email = account_email
     integration.updated_at = datetime.utcnow()
     db.commit()
     
-    # Redirect back to frontend settings tab with success
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/static/index.html?gmail_connected=true")
 
