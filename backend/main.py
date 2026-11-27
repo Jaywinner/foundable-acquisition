@@ -203,8 +203,13 @@ def gmail_status(db: Session = Depends(get_db)):
 
 @app.get("/api/auth/gmail/connect")
 def gmail_connect():
-    client_id = os.environ.get("GMAIL_CLIENT_ID", "demo_client_id")
-    redirect_uri = os.environ.get("GMAIL_REDIRECT_URI", "http://localhost:18005/api/auth/gmail/callback")
+    client_id = os.environ.get("GMAIL_CLIENT_ID", "")
+    if not client_id or client_id == "demo_client_id" or "your_google" in client_id:
+        raise HTTPException(
+            status_code=400, 
+            detail="Google OAuth Client ID is not configured on Render. Please set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET in your Render Environment Variables (from Google Cloud Console)."
+        )
+    redirect_uri = os.environ.get("GMAIL_REDIRECT_URI", "https://foundable-acquisition.onrender.com/api/auth/gmail/callback")
     scope = "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly"
     
     auth_url = (

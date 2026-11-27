@@ -88,11 +88,15 @@
                 try {
                     const res = await fetch('/api/auth/gmail/connect');
                     const data = await res.json();
+                    if (!res.ok) {
+                        alert(data.detail || 'Google OAuth Client ID is not configured on Render. Please add GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET in your Render Environment Variables.');
+                        return;
+                    }
                     if (data.auth_url) {
                         window.location.href = data.auth_url;
                     }
                 } catch (e) {
-                    showNotification('Failed to initiate Gmail OAuth', 'error');
+                    alert('Google OAuth Client ID is not configured. Please set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET in Render Environment Variables.');
                 }
             };
 
