@@ -12,10 +12,10 @@ DISCOVERY_SEEDS = [
         "category": "Landscaping businesses",
         "country": "United States",
         "city": "Austin, TX",
-        "website": "apexlandscaping-austin.com",
+        "website": "https://apexlandscapingaustin.com",
         "website_status": "broken",
         "gbp_url": "https://maps.google.com/?q=apex+landscaping+austin",
-        "email": "marcus@apexlandscaping-austin.com",
+        "email": "apexlandscapingaustin@gmail.com",
         "source": "Reddit r/smallbusiness",
         "source_url": "https://reddit.com/r/smallbusiness/comments/req1",
         "intent_category": "active_demand",
@@ -30,7 +30,7 @@ DISCOVERY_SEEDS = [
         "website": None,
         "website_status": "no_website",
         "gbp_url": None,
-        "email": "contact@puritycleanersmanchester.co.uk",
+        "email": "puritycleanersmcr@gmail.com",
         "source": "Google Business Profile directory",
         "source_url": "https://google.com/local/purity-cleaners",
         "intent_category": "gbp_opportunity",
@@ -576,8 +576,10 @@ class AutopilotEngine:
                 if b_name in existing_names:
                     b_name = f"{city.split(',')[0]} Premier {ind.split('&')[0].strip()}"
                 
-                clean_domain = b_name.lower().replace(" ", "").replace("&", "") + ".com"
-                c_email = f"contact@{clean_domain}"
+                clean_tag = b_name.lower().replace(" ", "").replace("&", "").replace(".", "")
+                c_email = f"{clean_tag}@gmail.com"
+                status_choice = random.choice(["broken", "no_website", "expired", "active"])
+                clean_domain = f"https://{clean_tag}.com" if status_choice != "no_website" else None
                 
                 selected_candidates.append({
                     "business_name": b_name,
@@ -586,7 +588,7 @@ class AutopilotEngine:
                     "country": country,
                     "city": city,
                     "website": clean_domain,
-                    "website_status": random.choice(["broken", "no_website", "expired", "active"]),
+                    "website_status": status_choice,
                     "gbp_url": f"https://maps.google.com/?q={b_name.replace(' ', '+')}",
                     "email": c_email,
                     "source": src_name,
